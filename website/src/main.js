@@ -481,9 +481,20 @@ function setupMenu() {
 
   // Any link closes it. setupAnchors already owns the smooth scroll, and it
   // needs Lenis running again before it fires, so close first.
-  panel.addEventListener("click", (e) => {
-    if (e.target.closest("a")) close({ restoreFocus: false });
-  });
+  //
+  // Capture phase is load-bearing, not a style choice. setupAnchors binds its
+  // handler to the <a> itself, so in the bubble phase the link handler runs
+  // first and calls lenis.scrollTo() while Lenis is still stopped — and
+  // Lenis drops any scrollTo issued while stopped. The drawer would close
+  // onto an unmoved page and the first tap would do nothing. Capturing here
+  // restarts Lenis before the link handler fires.
+  panel.addEventListener(
+    "click",
+    (e) => {
+      if (e.target.closest("a")) close({ restoreFocus: false });
+    },
+    true
+  );
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && isOpen()) close();
