@@ -127,6 +127,36 @@ function gtag() {
   window[GA_LAYER].push(arguments);
 }
 
+/* Query parameters GA may see. Anything else in the URL is dropped before GA
+   is told where the visitor is, as is any #fragment. */
+const GA_KEEP = new Set([
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_content",
+  "utm_term",
+  "service",
+]);
+
+function safeLocation() {
+  const out = new URLSearchParams();
+  new URLSearchParams(location.search).forEach((v, k) => {
+    if (GA_KEEP.has(k)) out.append(k, v.slice(0, 100));
+  });
+  const q = out.toString();
+  return location.origin + location.pathname + (q ? "?" + q : "");
+}
+
+/* The referring site's address only — which site sent them is the useful
+   part; the path and query of someone else's page are not ours to pass on. */
+function safeReferrer() {
+  try {
+    return document.referrer ? new URL(document.referrer).origin + "/" : "";
+  } catch {
+    return "";
+  }
+}
+
 function loadGA() {
   if (gaLoaded || !GA4_ID) return;
   gaLoaded = true;
@@ -146,6 +176,12 @@ function loadGA() {
   gtag("config", GA4_ID, {
     allow_google_signals: false,
     allow_ad_personalization_signals: false,
+    // By default GA records the full address bar and the full referrer. A
+    // link from an email tool or another site can carry ?email=, a name or a
+    // token in its query string, and Google's terms forbid receiving it. GA
+    // gets the path, the campaign tags and the service slug — nothing else.
+    page_location: safeLocation(),
+    page_referrer: safeReferrer(),
   });
 
   const s = document.createElement("script");
