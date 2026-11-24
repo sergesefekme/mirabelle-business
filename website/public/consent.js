@@ -458,8 +458,8 @@ function banner() {
       "adverts bring people to us. ";
   bar.innerHTML =
     '<p class="mbc__text">' + ask +
-    'Nothing is shared about your hair, your appointment ' +
-    'or your messages. You can say no and the site works exactly the same. ' +
+    'These are optional and only load if you accept. Your name, contact ' +
+    'details and messages are not passed to them. You can say no and the site works the same. ' +
     '<a href="/privacy.html#cookies">Read our privacy policy</a>.</p>' +
     '<div class="mbc__acts">' +
     '<button type="button" class="mbc__btn mbc__btn--decline">No thanks</button>' +
