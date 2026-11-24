@@ -49,6 +49,100 @@ const LIMITS = {
 
 const clip = (v, n) => (v == null ? null : String(v).slice(0, n) || null);
 
+/* ---------------------------------------------------------
+   What may be stored about the URL they arrived on
+   ---------------------------------------------------------
+   The landing page used to be stored as pathname + the WHOLE query string.
+   A link from an email tool, a CRM or another site can carry ?email=, a name,
+   a phone number or a login token, and every one of those would have landed
+   in booking_requests. Now only these survive:
+
+     - the path
+     - the five utm_* tags, each checked by looksPersonal()
+     - ?service=, only when it is one of the salon's own slugs
+
+   Everything else is dropped, including ad click IDs (fbclid, gclid). Their
+   presence still decides `source` in deriveSource(), so a Meta or Google ad
+   click is still credited correctly; only the identifier value is not kept.
+   Fragments never reach here: location.search excludes them.
+
+   THE SAME RULES ARE COPIED into the service-page bridge
+   (scripts/build-service-pages.py, and the two updo pages) and into
+   consent.js for Google Analytics, because those run without this bundle.
+   Change one, change all three; the privacy regression tests cover all. */
+
+/* Keep in step with SERVICE_SLUGS in booking.js. */
+const SERVICE_IDS = new Set([
+  "knotless-braids",
+  "box-braids",
+  "cornrows",
+  "cornrows-stitch-braids",
+  "fulani-braids",
+  "feed-in-braids",
+  "kids-braids",
+  "braided-updo",
+  "half-up-half-down",
+  "goddess-braids",
+]);
+
+/**
+ * True if a value looks like it carries an email address or a phone number.
+ *
+ * Email: anything containing "@" - no campaign tag legitimately needs one.
+ * Phone: any run of digits (allowing spaces, dots, dashes and brackets
+ * between them) that holds exactly 10 or 11 digits - a North American
+ * number. Dates such as 2026-11-24 (8 digits) and Meta ad IDs (15+ digits)
+ * pass through untouched.
+ *
+ * It cannot recognise a bare name. Names are kept out of URLs by the salon's
+ * own tagging convention, not by this check - see the implementation report.
+ */
+export function looksPersonal(value) {
+  const s = String(value);
+  if (s.includes("@")) return true;
+  const runs = s.match(/\d[\d\s().-]*\d/g) || [];
+  return runs.some((r) => {
+    const n = r.replace(/\D/g, "").length;
+    return n === 10 || n === 11;
+  });
+}
+
+/** A utm_* value fit to store, or null. */
+function cleanUtm(value, limit) {
+  if (value == null) return null;
+  const v = String(value).trim();
+  if (!v || looksPersonal(v)) return null;
+  return clip(v, limit);
+}
+
+/** The service slug if it is one of ours, else null. */
+function cleanService(value) {
+  const v = String(value || "").trim().toLowerCase();
+  return SERVICE_IDS.has(v) ? v : null;
+}
+
+/** Path plus only the approved, checked parameters. */
+export function safeLandingPage(loc = location) {
+  let path = loc.pathname || "/";
+  try {
+    if (looksPersonal(decodeURIComponent(path))) path = "/";
+  } catch {
+    path = "/";
+  }
+
+  const params = new URLSearchParams(loc.search);
+  const out = new URLSearchParams();
+  for (const f of UTM_FIELDS) {
+    const v = cleanUtm(params.get(f), LIMITS[f]);
+    if (v) out.set(f, v);
+  }
+  const svc = cleanService(params.get("service"));
+  if (svc) out.set("service", svc);
+
+  const q = out.toString();
+  return clip(path + (q ? "?" + q : ""), LIMITS.landing_page);
+}
+
 /** Host of a URL string, lowercased, or "" if it will not parse. */
 function host(url) {
   try {
@@ -73,7 +167,9 @@ function host(url) {
  * be reported as ad spend that was never spent.
  */
 function deriveSource(params, referrer) {
-  const utm = (params.get("utm_source") || "").toLowerCase();
+  // A personal-looking utm_source is discarded, so it is classified exactly
+  // as if it had never been there.
+  const utm = (cleanUtm(params.get("utm_source"), LIMITS.utm_source) || "").toLowerCase();
 
   if (utm) {
     if (/^(gbp|gmb|google_?business(_?profile)?)$/.test(utm)) return "gbp";
@@ -137,10 +233,10 @@ export function captureAttribution() {
   const data = { source: clip(deriveSource(params, referrer), LIMITS.source) };
 
   for (const f of UTM_FIELDS) {
-    data[f] = clip(params.get(f), LIMITS[f]);
+    data[f] = cleanUtm(params.get(f), LIMITS[f]);
   }
 
-  data.landing_page = clip(location.pathname + location.search, LIMITS.landing_page);
+  data.landing_page = safeLandingPage();
   // Same-origin referrers say nothing about acquisition and would just be
   // noise in the report.
   data.referrer =
@@ -155,14 +251,28 @@ export function captureAttribution() {
 /** The fields to merge into a booking insert. Never throws. */
 export function attributionPayload() {
   const d = read() || captureAttribution() || {};
+
+  /* Re-checked on the way out, not only on the way in. The stored value may
+     have been written by a service page's bridge - including a copy of that
+     page cached from before these rules existed - so it is never trusted
+     as-is. Same rules, applied a second time; cheap, and it cannot fail. */
+  let landing = null;
+  if (d.landing_page) {
+    try {
+      landing = safeLandingPage(new URL(d.landing_page, location.origin));
+    } catch {
+      landing = null;
+    }
+  }
+
   return {
     source: d.source ?? "direct",
-    utm_source: d.utm_source ?? null,
-    utm_medium: d.utm_medium ?? null,
-    utm_campaign: d.utm_campaign ?? null,
-    utm_content: d.utm_content ?? null,
-    utm_term: d.utm_term ?? null,
-    landing_page: d.landing_page ?? null,
+    utm_source: cleanUtm(d.utm_source, LIMITS.utm_source),
+    utm_medium: cleanUtm(d.utm_medium, LIMITS.utm_medium),
+    utm_campaign: cleanUtm(d.utm_campaign, LIMITS.utm_campaign),
+    utm_content: cleanUtm(d.utm_content, LIMITS.utm_content),
+    utm_term: cleanUtm(d.utm_term, LIMITS.utm_term),
+    landing_page: landing,
     referrer: d.referrer ?? null,
   };
 }

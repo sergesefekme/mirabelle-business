@@ -329,7 +329,36 @@
         var p = new URLSearchParams(location.search);
         var F = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
         var d = {};
-        F.forEach(function (k) { d[k] = p.get(k); });
+
+        /* PRIVACY RULES - the same as src/attribution.js, which this page
+           cannot import. Change one, change both (and consent.js); the
+           privacy regression tests check all three against the same cases.
+           Only utm_* values that do not look like an email or a phone number
+           are kept, ?service= only when it is one of our slugs, and nothing
+           else in the URL is stored or passed on. */
+        var LIM = { utm_source: 120, utm_medium: 120, utm_campaign: 200,
+                    utm_content: 200, utm_term: 200 };
+        var SVC = ["knotless-braids", "box-braids", "cornrows",
+                   "cornrows-stitch-braids", "fulani-braids", "feed-in-braids",
+                   "kids-braids", "braided-updo", "half-up-half-down",
+                   "goddess-braids"];
+        function personal(v) {
+          v = String(v);
+          if (v.indexOf("@") !== -1) return true;
+          var runs = v.match(/\d[\d\s().-]*\d/g) || [];
+          for (var i = 0; i < runs.length; i++) {
+            var n = runs[i].replace(/\D/g, "").length;
+            if (n === 10 || n === 11) return true;
+          }
+          return false;
+        }
+        function clean(v, n) {
+          if (v == null) return null;
+          v = String(v).trim();
+          return !v || personal(v) ? null : v.slice(0, n);
+        }
+
+        F.forEach(function (k) { d[k] = clean(p.get(k), LIM[k]); });
 
         var u = (d.utm_source || "").toLowerCase();
         var ref = document.referrer || "";
@@ -358,7 +387,14 @@
         }
 
         d.source = src;
-        d.landing_page = (location.pathname + location.search).slice(0, 500);
+        var path = location.pathname || "/";
+        try { if (personal(decodeURIComponent(path))) path = "/"; } catch (e) { path = "/"; }
+        var keep = new URLSearchParams();
+        F.forEach(function (k) { if (d[k]) keep.set(k, d[k]); });
+        var sv = (p.get("service") || "").trim().toLowerCase();
+        if (SVC.indexOf(sv) !== -1) keep.set("service", sv);
+        var ks = keep.toString();
+        d.landing_page = (path + (ks ? "?" + ks : "")).slice(0, 500);
         d.referrer = (h && h !== location.hostname) ? ref.slice(0, 500) : null;
 
         /* First touch wins, matching src/attribution.js. Someone who browses

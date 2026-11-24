@@ -127,24 +127,53 @@ function gtag() {
   window[GA_LAYER].push(arguments);
 }
 
-/* Query parameters GA may see. Anything else in the URL is dropped before GA
-   is told where the visitor is, as is any #fragment. */
-const GA_KEEP = new Set([
-  "utm_source",
-  "utm_medium",
-  "utm_campaign",
-  "utm_content",
-  "utm_term",
-  "service",
+/* What GA may be told about the address. The SAME RULES as
+   src/attribution.js and the service-page bridge, which this file cannot
+   import; change one, change all three. Only the five utm_* tags survive,
+   and only when the value does not look like an email or a phone number;
+   ?service= only when it is one of our slugs; everything else, and any
+   #fragment, is dropped. */
+const GA_UTM = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
+const GA_SERVICES = new Set([
+  "knotless-braids",
+  "box-braids",
+  "cornrows",
+  "cornrows-stitch-braids",
+  "fulani-braids",
+  "feed-in-braids",
+  "kids-braids",
+  "braided-updo",
+  "half-up-half-down",
+  "goddess-braids",
 ]);
 
-function safeLocation() {
-  const out = new URLSearchParams();
-  new URLSearchParams(location.search).forEach((v, k) => {
-    if (GA_KEEP.has(k)) out.append(k, v.slice(0, 100));
+function looksPersonal(value) {
+  const s = String(value);
+  if (s.includes("@")) return true;
+  const runs = s.match(/\d[\d\s().-]*\d/g) || [];
+  return runs.some((r) => {
+    const n = r.replace(/\D/g, "").length;
+    return n === 10 || n === 11;
   });
+}
+
+function safeLocation() {
+  let path = location.pathname || "/";
+  try {
+    if (looksPersonal(decodeURIComponent(path))) path = "/";
+  } catch {
+    path = "/";
+  }
+  const params = new URLSearchParams(location.search);
+  const out = new URLSearchParams();
+  for (const k of GA_UTM) {
+    const v = (params.get(k) || "").trim();
+    if (v && !looksPersonal(v)) out.set(k, v.slice(0, 100));
+  }
+  const svc = (params.get("service") || "").trim().toLowerCase();
+  if (GA_SERVICES.has(svc)) out.set("service", svc);
   const q = out.toString();
-  return location.origin + location.pathname + (q ? "?" + q : "");
+  return location.origin + path + (q ? "?" + q : "");
 }
 
 /* The referring site's address only — which site sent them is the useful
@@ -220,7 +249,9 @@ function forwardGA(entry) {
   if (!gaLoaded || !GA_EVENTS.has(entry.event)) return;
   const params = {};
   for (const k of ["service", "source", "campaign", "placement"]) {
-    if (entry[k]) params[k] = String(entry[k]).slice(0, 100);
+    // Already cleaned upstream; checked again here because this is the last
+    // point before Google.
+    if (entry[k] && !looksPersonal(entry[k])) params[k] = String(entry[k]).slice(0, 100);
   }
   gtag("event", entry.event, params);
 }
