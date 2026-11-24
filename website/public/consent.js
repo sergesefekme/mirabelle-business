@@ -50,7 +50,7 @@ const PIXEL_ID = "1614226446907840";
    Pasting an ID also raises the consent version below, so everyone who
    accepted when the banner named Meta alone is asked again. Their earlier
    "yes" never covered Google, and it is not ours to assume. */
-const GA4_ID = "";
+const GA4_ID = "G-DVE1TH0KYD";
 
 const KEY = "mb_consent";
 // Bump to re-ask everyone after a material policy change. Turning on GA4 is
