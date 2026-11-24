@@ -224,7 +224,71 @@ function loadGA() {
 }
 
 /* Called on Accept, and on every later page view by someone who accepted. */
+/* ---------------- what the trackers can read ---------------- */
+
+/* THE META PIXEL READS THE ADDRESS BAR AND document.referrer ITSELF.
+   It sends both, in full, with every event (its dl= and rl= fields), and
+   offers no setting to change that. Verified 2026-11-24 by intercepting the
+   real fbevents.js: an ?email=, a name, a phone number, both ad click IDs and
+   the #fragment all went out on PageView, ViewContent, Lead and the rest.
+   The fix is to make sure there is nothing in either to read before any
+   tracker loads.
+
+   cleanAddressBar() swaps the URL in place with history.replaceState: no
+   reload, no navigation, no history entry. The page cannot tell. It keeps:
+     - the path and the approved parameters, by the same rules as safeLocation()
+     - fbclid, because Meta issued it and Meta's own ad attribution reads it.
+       Checked to look like a click ID, never anything else
+     - #fragment only when it is a plain element id such as #book, so the
+       booking anchors and section links still work
+   gclid, gbraid and wbraid are dropped. They are Google's, and Meta has no
+   use for them. If Google Ads is ever run, they must be kept here AND added
+   to the GA rules, or Google Ads attribution breaks.
+
+   maskReferrer() limits document.referrer to the referring site's address
+   for every script that reads it after this point. The browser's own
+   Referer header is unaffected: it is already trimmed to the site's
+   address for cross-site requests by default.
+
+   BOTH RUN ONLY AFTER THE SITE'S OWN SCRIPTS HAVE READ THE ORIGINAL URL.
+   src/attribution.js needs fbclid/gclid and the referrer to credit the
+   booking's source. On the Accept click that has long since happened. On a
+   return visit with consent already stored, start() waits for
+   DOMContentLoaded, which the browser fires only after every deferred and
+   module script, including the site bundle, has run. */
+const FBCLID_OK = /^[A-Za-z0-9_-]{1,500}$/;
+const FRAGMENT_OK = /^#[A-Za-z][A-Za-z0-9_-]{0,63}$/;
+
+function cleanAddressBar() {
+  try {
+    let url = safeLocation();
+    const fb = new URLSearchParams(location.search).get("fbclid");
+    if (fb && FBCLID_OK.test(fb)) {
+      url += (url.includes("?") ? "&" : "?") + "fbclid=" + encodeURIComponent(fb);
+    }
+    if (FRAGMENT_OK.test(location.hash)) url += location.hash;
+    if (url !== location.href) history.replaceState(history.state, "", url);
+  } catch {
+    /* an address that cannot be cleaned is left alone, never broken */
+  }
+}
+
+function maskReferrer() {
+  const origin = safeReferrer();
+  try {
+    Object.defineProperty(document, "referrer", {
+      configurable: true,
+      get: () => origin,
+    });
+  } catch {
+    /* non-configurable in some exotic browser: the Pixel then sees the
+       browser's own value, which is already trimmed cross-site by default */
+  }
+}
+
 function loadTrackers() {
+  cleanAddressBar();
+  maskReferrer();
   loadPixel();
   loadGA();
   // Replay anything that happened before consent was given, and forward
@@ -431,7 +495,21 @@ function banner() {
 
   const s = stored();
   if (s && s.choice === "granted") {
-    loadTrackers();
+    // Not immediately: the site's own scripts must read the original URL
+    // first (see cleanAddressBar). DOMContentLoaded fires after every
+    // deferred and module script; load is the fallback for the case where
+    // this file was ever loaded late, after DOMContentLoaded had passed.
+    let done = false;
+    const go = () => {
+      if (done) return;
+      done = true;
+      loadTrackers();
+    };
+    if (document.readyState === "complete") go();
+    else {
+      document.addEventListener("DOMContentLoaded", go, { once: true });
+      window.addEventListener("load", go, { once: true });
+    }
     return;
   }
   if (s && s.choice === "denied") return;

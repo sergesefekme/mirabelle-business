@@ -107,6 +107,23 @@ export function looksPersonal(value) {
   });
 }
 
+/**
+ * The referring site's address only: scheme, host and port, e.g.
+ * "https://www.facebook.com". The site is what the report needs; the path,
+ * query, fragment and any user:password@ in front of the host never are,
+ * and URL.origin drops all of them. Anything that is not an http(s) URL is
+ * stored as null.
+ */
+export function safeOrigin(ref) {
+  try {
+    const u = new URL(String(ref));
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    return clip(u.origin, LIMITS.referrer);
+  } catch {
+    return null;
+  }
+}
+
 /** A utm_* value fit to store, or null. */
 function cleanUtm(value, limit) {
   if (value == null) return null;
@@ -240,9 +257,7 @@ export function captureAttribution() {
   // Same-origin referrers say nothing about acquisition and would just be
   // noise in the report.
   data.referrer =
-    referrer && host(referrer) !== location.hostname
-      ? clip(referrer, LIMITS.referrer)
-      : null;
+    referrer && host(referrer) !== location.hostname ? safeOrigin(referrer) : null;
 
   write(data);
   return data;
@@ -273,6 +288,6 @@ export function attributionPayload() {
     utm_content: cleanUtm(d.utm_content, LIMITS.utm_content),
     utm_term: cleanUtm(d.utm_term, LIMITS.utm_term),
     landing_page: landing,
-    referrer: d.referrer ?? null,
+    referrer: d.referrer ? safeOrigin(d.referrer) : null,
   };
 }

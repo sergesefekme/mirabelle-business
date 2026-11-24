@@ -404,7 +404,16 @@
         if (SVC.indexOf(sv) !== -1) keep.set("service", sv);
         var ks = keep.toString();
         d.landing_page = (path + (ks ? "?" + ks : "")).slice(0, 500);
-        d.referrer = (h && h !== location.hostname) ? ref.slice(0, 500) : null;
+        /* The referring site's address only - never its path, query,
+           fragment or credentials. Same rule as safeOrigin() in
+           src/attribution.js. */
+        d.referrer = null;
+        if (h && h !== location.hostname) {
+          try {
+            var ru = new URL(ref);
+            if (ru.protocol === "https:" || ru.protocol === "http:") d.referrer = ru.origin.slice(0, 500);
+          } catch (e) {}
+        }
 
         /* First touch wins, matching src/attribution.js. Someone who browses
            three service pages before booking is still credited to the ad that
