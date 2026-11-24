@@ -1,12 +1,12 @@
 /* ---------------------------------------------------------
-   Cookie consent, and the Meta Pixel it gates
+   Cookie consent, and the Meta Pixel and Google Analytics it gates
    ---------------------------------------------------------
-   ONE FILE, ONE PLACE TO PASTE THE PIXEL ID — see PIXEL_ID below. Every page
-   loads this same file, so the ID is never duplicated and can never drift
-   between the home page and the eight generated service pages.
+   ONE FILE, ONE PLACE TO PASTE EACH ID — see PIXEL_ID and GA4_ID below. Every
+   page loads this same file, so neither ID is ever duplicated and neither can
+   drift between the home page and the generated service pages.
 
-   THE PIXEL DOES NOT LOAD UNTIL SOMEONE ACCEPTS. That is the whole point of
-   this file. Meta's own snippet fires on injection, so it cannot simply be
+   NOTHING LOADS UNTIL SOMEONE ACCEPTS — not the Pixel, not Google Analytics.
+   That is the whole point of this file. Meta's own snippet fires on injection, so it cannot simply be
    pasted into <head> behind an if-statement added later — it has to be
    injected only after a choice is recorded. Until then no Meta script is
    fetched, no cookie is set, and no request reaches facebook.net.
@@ -38,8 +38,24 @@
    That is the right side of the trade. */
 const PIXEL_ID = "1614226446907840";
 
+/* ===========================================================
+   The Google Analytics 4 Measurement ID ("G-XXXXXXXXXX").
+   ===========================================================
+   EMPTY MEANS OFF. While this is "", no Google script is ever requested and
+   the banner asks about Meta alone, exactly as before.
+
+   SHIP THE ID AND THE PRIVACY POLICY TOGETHER. privacy.html describes Google
+   Analytics as running on Accept; the ID is what makes that true.
+
+   Pasting an ID also raises the consent version below, so everyone who
+   accepted when the banner named Meta alone is asked again. Their earlier
+   "yes" never covered Google, and it is not ours to assume. */
+const GA4_ID = "";
+
 const KEY = "mb_consent";
-const VERSION = 1; // bump to re-ask everyone after a material policy change
+// Bump to re-ask everyone after a material policy change. Turning on GA4 is
+// one, so it moves the version by itself.
+const VERSION = GA4_ID ? 2 : 1;
 
 function stored() {
   try {
@@ -95,17 +111,91 @@ function loadPixel() {
 
   window.fbq("init", PIXEL_ID);
   window.fbq("track", "PageView");
+}
 
+/* ---------------- Google Analytics 4 ---------------- */
+
+/* gtag.js gets a dataLayer of its OWN (the &l= parameter). The shared
+   window.dataLayer carries our event objects, and gtag.js reads any dataLayer
+   it is attached to; sharing one would let it pick those objects up as well as
+   the explicit gtag("event") calls in forward(), and every click would risk
+   being counted twice. Separate queues make double counting impossible. */
+const GA_LAYER = "mbGtagLayer";
+let gaLoaded = false;
+
+function gtag() {
+  window[GA_LAYER].push(arguments);
+}
+
+function loadGA() {
+  if (gaLoaded || !GA4_ID) return;
+  gaLoaded = true;
+
+  window[GA_LAYER] = window[GA_LAYER] || [];
+
+  // Only ever reached after Accept. Analytics is granted; advertising storage
+  // stays denied — the site runs no Google Ads, and Accept was never asked to
+  // cover them.
+  gtag("consent", "default", {
+    analytics_storage: "granted",
+    ad_storage: "denied",
+    ad_user_data: "denied",
+    ad_personalization: "denied",
+  });
+  gtag("js", new Date());
+  gtag("config", GA4_ID, {
+    allow_google_signals: false,
+    allow_ad_personalization_signals: false,
+  });
+
+  const s = document.createElement("script");
+  s.async = true;
+  s.src =
+    "https://www.googletagmanager.com/gtag/js?id=" +
+    encodeURIComponent(GA4_ID) +
+    "&l=" +
+    GA_LAYER;
+  document.head.appendChild(s);
+}
+
+/* Called on Accept, and on every later page view by someone who accepted. */
+function loadTrackers() {
+  loadPixel();
+  loadGA();
   // Replay anything that happened before consent was given, and forward
   // everything after it.
   drainDataLayer();
+}
+
+/* GA4 receives our events under their own names, so the GA reports, the Meta
+   mapping below and the dataLayer all speak the same vocabulary. Mark
+   booking_submitted as the Key Event in GA4 (Admin → Events). Only
+   non-personal fields are passed: never a name, phone, email or note. */
+const GA_EVENTS = new Set([
+  "service_page_viewed",
+  "book_now_clicked",
+  "booking_started",
+  "booking_submitted",
+  "phone_clicked",
+  "email_clicked",
+]);
+
+function forwardGA(entry) {
+  if (!gaLoaded || !GA_EVENTS.has(entry.event)) return;
+  const params = {};
+  for (const k of ["service", "source", "campaign", "placement"]) {
+    if (entry[k]) params[k] = String(entry[k]).slice(0, 100);
+  }
+  gtag("event", entry.event, params);
 }
 
 /* Maps our own events onto Meta's standard ones. Kept in one place so the
    mapping is auditable: the only thing that counts as a conversion is
    booking_submitted, which booking.js fires solely after the row is stored. */
 function forward(entry) {
-  if (!window.fbq || !entry || !entry.event) return;
+  if (!entry || !entry.event) return;
+  forwardGA(entry);
+  if (!window.fbq) return;
   switch (entry.event) {
     case "service_page_viewed":
       window.fbq("track", "ViewContent", {
@@ -151,7 +241,7 @@ function drainDataLayer() {
     const original = dl.push.bind(dl);
     dl.push = function (...args) {
       const r = original(...args);
-      if (pixelLoaded) args.forEach(forward);
+      if (pixelLoaded || gaLoaded) args.forEach(forward);
       drained = dl.length;
       return r;
     };
@@ -229,9 +319,15 @@ function banner() {
   bar.className = "mbc";
   bar.setAttribute("role", "dialog");
   bar.setAttribute("aria-label", "Cookies");
+  // The banner names exactly what Accept turns on — Google only once GA4_ID is set.
+  const ask = GA4_ID
+    ? "We would like to use Meta (Facebook) and Google Analytics cookies to see which " +
+      "of our adverts bring people to us and how the site is used. "
+    : "We would like to use Meta (Facebook) cookies to see which of our " +
+      "adverts bring people to us. ";
   bar.innerHTML =
-    '<p class="mbc__text">We would like to use Meta (Facebook) cookies to see which of our ' +
-    'adverts bring people to us. Nothing is shared about your hair, your appointment ' +
+    '<p class="mbc__text">' + ask +
+    'Nothing is shared about your hair, your appointment ' +
     'or your messages. You can say no and the site works exactly the same. ' +
     '<a href="/privacy.html#cookies">Read our privacy policy</a>.</p>' +
     '<div class="mbc__acts">' +
@@ -251,7 +347,7 @@ function banner() {
   bar.querySelector(".mbc__btn--accept").addEventListener("click", () => {
     remember("granted");
     close();
-    loadPixel();
+    loadTrackers();
   });
   bar.querySelector(".mbc__btn--decline").addEventListener("click", () => {
     remember("denied");
@@ -268,7 +364,7 @@ function banner() {
 
   const s = stored();
   if (s && s.choice === "granted") {
-    loadPixel();
+    loadTrackers();
     return;
   }
   if (s && s.choice === "denied") return;

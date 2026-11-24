@@ -349,7 +349,10 @@
 
         var src = "direct";
         if (u) {
-          src = /facebook|^fb$|meta/.test(u) ? "facebook"
+          /* gbp is tested before google: the free Business Profile must not
+             be reported as paid Google traffic. Matches src/attribution.js. */
+          src = /^(gbp|gmb|google_?business(_?profile)?)$/.test(u) ? "gbp"
+              : /facebook|^fb$|meta/.test(u) ? "facebook"
               : /instagram|^ig$/.test(u) ? "instagram"
               : /google|adwords|gads/.test(u) ? "google"
               : /^(direct|none)$/.test(u) ? "direct" : "referral";
@@ -390,11 +393,10 @@
           );
         }
 
-        /* EVENT LAYER. No third-party script is installed — no GA4, no Meta
-           Pixel, no cookies — because the published privacy policy says so and
-           that promise is worth keeping. This pushes the same events onto a
-           standard dataLayer, so if a tag manager is ever added it consumes
-           them without any of this being rewritten.
+        /* EVENT LAYER. Events go onto the standard dataLayer and nowhere
+           else. /consent.js forwards them to the Meta Pixel and GA4, and only
+           for visitors who accepted cookies; for everyone else they go
+           nowhere. Nothing personal is ever pushed.
 
            The conversion event is NOT here. book_now_clicked is a click, not
            a booking; firing a conversion on it would report every curious tap
@@ -421,6 +423,28 @@
             });
           }
         );
+
+        /* Calls and emails. Delegated, so every tel: and mailto: link on the
+           page is covered — header, hero and any added later — without
+           tagging each one. Capture phase so nothing can pre-empt it. */
+        var svc = document.title.split(" in Ashburn")[0];
+        document.addEventListener("click", function (e) {
+          var a = e.target.closest && e.target.closest("a[href]");
+          if (!a) return;
+          var href = a.getAttribute("href") || "";
+          var ev = href.indexOf("tel:") === 0 ? "phone_clicked"
+                 : href.indexOf("mailto:") === 0 ? "email_clicked" : null;
+          if (!ev) return;
+          window.dataLayer.push({
+            event: ev,
+            service: svc,
+            placement: a.closest("header") ? "header"
+                     : a.closest(".stickybook") ? "stickybook"
+                     : a.closest("footer") ? "footer" : "page",
+            source: d.source,
+            campaign: d.utm_campaign || null,
+          });
+        }, true);
       })();
     </script>
   </body>

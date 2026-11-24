@@ -24,6 +24,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/landing.css" />
+    <script src="/consent.js" defer></script>
     <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -112,7 +113,7 @@
           <h1>Half Up Half Down</h1>
           <p class="lede">The best of both — braided structure with length left loose.</p>
           <p class="facts">Price agreed when you book</p>
-          <a class="cta" href="/?service=half-up-half-down#book">Book this style</a>
+          <a class="cta" href="/?service=half-up-half-down#book" data-mb-event="book_now_clicked" data-mb-service="Half Up Half Down">Book this style</a>
           <p class="cta__sub">Or call <a href="tel:+15714260602">571-426-0602</a> · Open Monday to Saturday</p>
         </div>
       </section>
@@ -179,7 +180,7 @@
           Send a request and we confirm your slot by text, usually the same day.
           Nothing is charged on the website.
         </p>
-        <a class="cta" href="/?service=half-up-half-down#book">Book Half Up Half Down</a>
+        <a class="cta" href="/?service=half-up-half-down#book" data-mb-event="book_now_clicked" data-mb-service="Half Up Half Down">Book Half Up Half Down</a>
         <p class="cta__sub">
           44048 Lords Valley Ter, Ashburn, VA 20147 ·
           <a href="https://www.google.com/maps/search/?api=1&amp;query=44048+Lords+Valley+Ter%2C+Ashburn%2C+VA+20147"
@@ -195,6 +196,129 @@
 
     <script>
       document.getElementById("y").textContent = new Date().getFullYear();
+    </script>
+    <script>
+      /* CAMPAIGN BRIDGE.
+         Ad traffic lands HERE, not on the home page, and this page loads no
+         bundle by design. Without this the UTM parameters die at the first
+         click: the booking link is /?service=...#book, the home page then sees
+         no campaign, and every ad-driven booking records as "direct" — which
+         silently destroys the ad reporting it was all built for.
+
+         Two belts, because attribution that only works sometimes is worse than
+         none. The values are written to the same sessionStorage key the
+         booking form reads, AND appended to the booking links in case storage
+         is unavailable (private mode, storage disabled). */
+      (function () {
+        var p = new URLSearchParams(location.search);
+        var F = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
+        var d = {};
+        F.forEach(function (k) { d[k] = p.get(k); });
+
+        var u = (d.utm_source || "").toLowerCase();
+        var ref = document.referrer || "";
+        var h = "";
+        try { h = ref ? new URL(ref).hostname.toLowerCase() : ""; } catch (e) {}
+
+        var src = "direct";
+        if (u) {
+          /* gbp is tested before google: the free Business Profile must not
+             be reported as paid Google traffic. Matches src/attribution.js. */
+          src = /^(gbp|gmb|google_?business(_?profile)?)$/.test(u) ? "gbp"
+              : /facebook|^fb$|meta/.test(u) ? "facebook"
+              : /instagram|^ig$/.test(u) ? "instagram"
+              : /google|adwords|gads/.test(u) ? "google"
+              : /^(direct|none)$/.test(u) ? "direct" : "referral";
+        } else if (p.has("fbclid")) {
+          src = "facebook";
+        } else if (p.has("gclid") || p.has("gbraid") || p.has("wbraid")) {
+          src = "google";
+        } else if (h) {
+          src = /(^|\.)facebook\.com$|(^|\.)fb\.(com|me)$/.test(h) ? "facebook"
+              : /(^|\.)instagram\.com$/.test(h) ? "instagram"
+              : /(^|\.)google\./.test(h) ? "organic"
+              : /(^|\.)bing\.com$|(^|\.)duckduckgo\.com$/.test(h) ? "organic"
+              : h === location.hostname ? "direct" : "referral";
+        }
+
+        d.source = src;
+        d.landing_page = (location.pathname + location.search).slice(0, 500);
+        d.referrer = (h && h !== location.hostname) ? ref.slice(0, 500) : null;
+
+        /* First touch wins, matching src/attribution.js. Someone who browses
+           three service pages before booking is still credited to the ad that
+           brought them to the first one. */
+        try {
+          if (!sessionStorage.getItem("mb_attrib")) {
+            sessionStorage.setItem("mb_attrib", JSON.stringify(d));
+          }
+        } catch (e) {}
+
+        var q = F.filter(function (k) { return d[k]; })
+                 .map(function (k) { return k + "=" + encodeURIComponent(d[k]); })
+                 .join("&");
+        if (q) {
+          Array.prototype.forEach.call(
+            document.querySelectorAll('a[href*="?service="]'),
+            function (a) {
+              a.href = a.getAttribute("href").replace("#book", "") + "&" + q + "#book";
+            }
+          );
+        }
+
+        /* EVENT LAYER. Events go onto the standard dataLayer and nowhere
+           else. /consent.js forwards them to the Meta Pixel and GA4, and only
+           for visitors who accepted cookies; for everyone else they go
+           nowhere. Nothing personal is ever pushed.
+
+           The conversion event is NOT here. book_now_clicked is a click, not
+           a booking; firing a conversion on it would report every curious tap
+           as a customer and make the ad reporting worse than useless. The
+           conversion fires in booking.js, only after the row is stored. */
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({
+          event: "service_page_viewed",
+          service: document.title.split(" in Ashburn")[0],
+          source: d.source,
+          campaign: d.utm_campaign || null,
+        });
+
+        Array.prototype.forEach.call(
+          document.querySelectorAll("[data-mb-event]"),
+          function (el) {
+            el.addEventListener("click", function () {
+              window.dataLayer.push({
+                event: el.getAttribute("data-mb-event"),
+                service: el.getAttribute("data-mb-service") || null,
+                source: d.source,
+                campaign: d.utm_campaign || null,
+              });
+            });
+          }
+        );
+
+        /* Calls and emails. Delegated, so every tel: and mailto: link on the
+           page is covered — header, hero and any added later — without
+           tagging each one. Capture phase so nothing can pre-empt it. */
+        var svc = document.title.split(" in Ashburn")[0];
+        document.addEventListener("click", function (e) {
+          var a = e.target.closest && e.target.closest("a[href]");
+          if (!a) return;
+          var href = a.getAttribute("href") || "";
+          var ev = href.indexOf("tel:") === 0 ? "phone_clicked"
+                 : href.indexOf("mailto:") === 0 ? "email_clicked" : null;
+          if (!ev) return;
+          window.dataLayer.push({
+            event: ev,
+            service: svc,
+            placement: a.closest("header") ? "header"
+                     : a.closest(".stickybook") ? "stickybook"
+                     : a.closest("footer") ? "footer" : "page",
+            source: d.source,
+            campaign: d.utm_campaign || null,
+          });
+        }, true);
+      })();
     </script>
   </body>
 </html>

@@ -185,10 +185,10 @@ function preselectService(form) {
   if (match) select.value = match.value || match.text;
 }
 
-/* Event layer. No analytics vendor is installed — no GA4, no Meta Pixel, no
-   cookies — because the published privacy policy says so. These push onto the
-   standard dataLayer so a tag manager added later consumes them with no
-   rewiring. */
+/* Event layer. These push onto the standard dataLayer and nothing else.
+   consent.js forwards them to the Meta Pixel and GA4, and only for visitors
+   who accepted cookies; for everyone else they go nowhere. Nothing personal
+   is ever pushed — no name, phone, email or note. */
 function track(event, extra) {
   try {
     window.dataLayer = window.dataLayer || [];

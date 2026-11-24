@@ -34,6 +34,12 @@ import os
 # services never got an -ashburn-va page. If you need to regenerate, do it for
 # those two slugs alone.
 #
+# AND EVEN THEN, NOT AS-IS. Both pages were hand-edited after generation to
+# load /consent.js and carry the campaign bridge and click tracking copied from
+# build-service-pages.py. This template has neither, so regenerating would
+# silently strip their tracking. The right fix is to move both services into
+# build-service-pages.py as -ashburn-va pages and redirect these two URLs.
+#
 
 OUT = os.path.join("website", "public")
 SITE = "https://mimi-african-braiding-styling.com"

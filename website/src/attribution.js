@@ -6,12 +6,12 @@
    on and the referrer the browser volunteers, held for the length of the tab,
    and submitted with the booking.
 
-   WHY NOT A PIXEL. The published privacy policy says this site sets no
-   cookies and runs no advertising or cross-site tracking. That is a promise
-   worth keeping, and first-party UTM capture answers the spend question
-   anyway: it ties a booking to the exact campaign that produced it. What it
-   cannot do is feed Meta's optimiser. That is the trade, and it was made
-   deliberately.
+   WHY THIS AS WELL AS THE PIXEL AND GA4. Those two load only for visitors
+   who accept cookies (consent.js), so on their own they miss everyone who
+   declines. This runs for every visitor, needs no cookie and no third party,
+   and ties the booking itself - not a guess about it - to the campaign that
+   produced it. It is the one source of attribution that covers every
+   booking.
 
    FIRST TOUCH WINS. The attribution is written once per tab and never
    overwritten. A visitor who arrives from a Facebook ad, wanders the site,
@@ -59,17 +59,24 @@ function host(url) {
 }
 
 /**
- * One of: facebook · instagram · google · referral · organic · direct.
+ * One of: facebook · instagram · google · gbp · referral · organic · direct.
  *
  * utm_source wins when present, because that is the salon's own tagging and
  * it is deliberate. Click IDs come next: fbclid means Meta sent them even
  * when the ad was built without UTMs, which is the common case for a boosted
  * post. The referrer is the last resort.
+ *
+ * "google" means PAID Google traffic. The Google Business Profile is free
+ * and gets its own bucket, "gbp": tag the profile's website link with
+ * ?utm_source=gbp&utm_medium=organic&utm_campaign=profile. Tested before the
+ * google rule, because "google_business" would otherwise match /google/ and
+ * be reported as ad spend that was never spent.
  */
 function deriveSource(params, referrer) {
   const utm = (params.get("utm_source") || "").toLowerCase();
 
   if (utm) {
+    if (/^(gbp|gmb|google_?business(_?profile)?)$/.test(utm)) return "gbp";
     if (/facebook|^fb$|meta/.test(utm)) return "facebook";
     if (/instagram|^ig$/.test(utm)) return "instagram";
     if (/google|adwords|gads/.test(utm)) return "google";

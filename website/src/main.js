@@ -9,6 +9,7 @@
 
 import Lenis from "lenis";
 import { setupBooking } from "./booking.js";
+import { attributionPayload } from "./attribution.js";
 import { setupReviews } from "./reviews.js";
 import gsap from "gsap";
 import ScrollTrigger from "gsap/ScrollTrigger";
@@ -746,6 +747,64 @@ function setupYear() {
 }
 
 /* ---------------------------------------------------------
+   Click tracking: calls, emails, Book buttons
+   ---------------------------------------------------------
+   A tap on the phone number is most likely the salon's biggest booking
+   channel, and until this existed it was invisible: consent.js already maps
+   phone_clicked and email_clicked, but nothing on the page ever pushed them.
+   Neither did the home page's Book buttons — only the service pages did.
+
+   One delegated listener covers every link on the page, present and future,
+   so a new button can never be "the one that isn't tracked". Capture phase,
+   because the mobile menu closes itself in capture (see setupMenu) and a
+   bubbling listener could be pre-empted.
+
+   These are clicks, not conversions. The conversion is booking_submitted,
+   fired by booking.js only after the request is stored. Events go onto the
+   dataLayer only; consent.js forwards them to Meta and GA4 if, and only if,
+   the visitor accepted.
+   --------------------------------------------------------- */
+
+function placementOf(el) {
+  if (el.closest("#nav")) return "nav";
+  if (el.closest("#nav-overlay")) return "menu";
+  if (el.closest("footer")) return "footer";
+  return el.closest("section[id]")?.id || "page";
+}
+
+function setupClickTracking() {
+  document.addEventListener(
+    "click",
+    (e) => {
+      const a = e.target.closest?.("a[href]");
+      if (!a) return;
+      const href = a.getAttribute("href") || "";
+
+      let event = null;
+      if (href.startsWith("tel:")) event = "phone_clicked";
+      else if (href.startsWith("mailto:")) event = "email_clicked";
+      else if (href === "#book") event = "book_now_clicked";
+      if (!event) return;
+
+      try {
+        const { source, utm_campaign } = attributionPayload();
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({
+          event,
+          service: a.dataset.service || null,
+          placement: placementOf(a),
+          source,
+          campaign: utm_campaign,
+        });
+      } catch {
+        /* never let analytics get in the way of a call or a booking */
+      }
+    },
+    { capture: true }
+  );
+}
+
+/* ---------------------------------------------------------
    Placeholder guard
    ---------------------------------------------------------
    The phone number, pricing, address and booking target are
@@ -812,6 +871,7 @@ function init() {
   setupReveals();
   setupParallax();
   setupYear();
+  setupClickTracking();
   warnPlaceholders();
 
   // Layout settles after fonts land — pins depend on final metrics.
