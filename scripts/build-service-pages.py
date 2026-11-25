@@ -553,6 +553,11 @@ PAGE = """<!doctype html>
         <span class="stickybook__name">{name}</span>
         <span class="stickybook__price">{sticky_price}</span>
       </span>
+      <!-- No data-mb-event: the delegated tel: listener in the campaign
+           bridge already sends phone_clicked (placement "stickybook");
+           tagging it as well would count every call twice. -->
+      <a class="stickybook__call" href="tel:+15714260602"
+         aria-label="Call the salon, 571-426-0602">Call</a>
       <a class="stickybook__cta" href="/?service={form_slug}#book"
          data-mb-event="book_now_clicked" data-mb-service="{name}">Book now</a>
     </div>
