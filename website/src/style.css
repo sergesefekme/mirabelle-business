@@ -707,6 +707,51 @@ body.is-menu-open {
   will-change: transform;
 }
 
+/* Desktop first screen: what, where, and both CTAs before any scrolling.
+   z-index 4 puts it above .hero__reveal (3), which covers the frame at
+   opacity 0 until the copy arrives and would otherwise swallow the clicks.
+   setupHeroExpand() fades it out and sets visibility:hidden once faded, so
+   invisible buttons are neither clickable nor in the tab order. */
+.hero__quick {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(9vh + 2.4rem);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 var(--pad-x);
+  text-align: center;
+  transition: bottom 0.3s ease;
+}
+
+.hero__quick-where {
+  margin: 0;
+  font-size: clamp(0.92rem, 1.1vw, 1.02rem);
+  line-height: 1.5;
+  color: var(--ivory);
+  text-shadow: 0 1px 12px rgba(16, 11, 9, 0.85);
+}
+
+.hero__quick-cta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.9rem;
+}
+
+/* The consent banner sits over the bottom of the first screen until it is
+   answered; lift the row clear of it. consent.js sets body.mbc-open. */
+body.mbc-open .hero__quick {
+  bottom: calc(9vh + 2.4rem + 3.75rem);
+}
+
+.hero--static .hero__quick {
+  display: none;
+}
+
 .hero__scrim {
   position: absolute;
   inset: 0;

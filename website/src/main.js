@@ -575,6 +575,7 @@ function setupHeroExpand() {
   const bed = document.querySelector("#hero-bed");
   const veil = document.querySelector("#hero-veil");
   const meta = document.querySelector("#hero-meta");
+  const quick = document.querySelector("#hero-quick");
   const reveal = document.querySelector("#hero-reveal");
   const scrim = document.querySelector("#hero-scrim");
   const wordL = document.querySelector(".hero__word--l");
@@ -595,6 +596,8 @@ function setupHeroExpand() {
   const BED = [0, 0.72];
   const WORD_FADE = [0.5, 0.92];
   const META_FADE = [0.08, 0.5];
+  // The first-screen CTA row leaves early, before the frame has grown under it.
+  const QUICK_FADE = [0.04, 0.3];
   const COPY = [0.76, 1];
 
   const at = ([a, b], p) => clamp((p - a) / (b - a));
@@ -681,6 +684,13 @@ function setupHeroExpand() {
     if (meta) meta.style.opacity = String(1 - at(META_FADE, p));
     if (metaL) metaL.style.transform = `translateX(${-metaOut}vw)`;
     if (metaR) metaR.style.transform = `translateX(${metaOut}vw)`;
+
+    if (quick) {
+      const q = 1 - at(QUICK_FADE, p);
+      quick.style.opacity = String(q);
+      // Faded buttons must not stay clickable or focusable.
+      quick.style.visibility = q < 0.02 ? "hidden" : "visible";
+    }
 
     // Leads the copy slightly so the type never lands on an unscrimmed frame.
     if (scrim) scrim.style.opacity = String(at([0.62, 0.94], p));
