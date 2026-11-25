@@ -109,6 +109,13 @@ function loadPixel() {
   })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
   /* eslint-enable */
 
+  /* Manual-only mode, set BEFORE init. Without it Meta's "automatic setup"
+     (its PageMetadata, Microdata, InferredEvents, ScrollDepth and
+     EngagementData features) sends the page title, meta description and
+     locale with every PageView and auto-captures button taps. The Events
+     Manager toggles do not switch this off; only this call does. Our own
+     named events below are unaffected. */
+  window.fbq("set", "autoConfig", false, PIXEL_ID);
   window.fbq("init", PIXEL_ID);
   window.fbq("track", "PageView");
 }
