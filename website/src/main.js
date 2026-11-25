@@ -778,8 +778,39 @@ function setupYear() {
 function placementOf(el) {
   if (el.closest("#nav")) return "nav";
   if (el.closest("#nav-overlay")) return "menu";
+  // Same label the service pages use for their bar.
+  if (el.closest(".stickybook")) return "stickybook";
   if (el.closest("footer")) return "footer";
   return el.closest("section[id]")?.id || "page";
+}
+
+/* Phone action bar: shown once the hero is out of view, hidden while the
+   booking form is on screen so it never sits over the fields or the submit
+   button. CSS keeps it display:none from 700px up, so this is inert there. */
+function setupStickyBook() {
+  const bar = document.querySelector("#stickybook");
+  const hero = document.querySelector("#home");
+  const book = document.querySelector("#book");
+  if (!bar || !hero || !("IntersectionObserver" in window)) return;
+
+  let pastHero = false;
+  let atBook = false;
+  const sync = () => bar.classList.toggle("is-shown", pastHero && !atBook);
+
+  new IntersectionObserver(([e]) => {
+    pastHero = !e.isIntersecting;
+    sync();
+  }).observe(hero);
+
+  if (book) {
+    new IntersectionObserver(
+      ([e]) => {
+        atBook = e.isIntersecting;
+        sync();
+      },
+      { threshold: 0.05 }
+    ).observe(book);
+  }
 }
 
 function setupClickTracking() {
@@ -882,6 +913,7 @@ function init() {
   setupParallax();
   setupYear();
   setupClickTracking();
+  setupStickyBook();
   warnPlaceholders();
 
   // Layout settles after fonts land — pins depend on final metrics.

@@ -1182,6 +1182,120 @@ body.mbc-open .hero__quick {
   }
 }
 
+/* ---------------- Phone action bar ---------------- */
+/* Same look as the service pages' bar (public/landing.css), plus Call.
+   Hidden from 700px up, where the nav Book button and the hero row cover it.
+   Off-screen it is also visibility:hidden, so it is never tabbed into or
+   announced while the visitor cannot see it. z-index 40 keeps it under the
+   menu overlay (55), the nav (60) and the consent banner (60). */
+.stickybook {
+  display: none;
+}
+
+@media (max-width: 699px) {
+  .stickybook {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 1rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+    background: rgba(16, 11, 9, 0.96);
+    border-top: 1px solid var(--mahogany);
+    backdrop-filter: blur(8px);
+    transform: translateY(110%);
+    visibility: hidden;
+    transition: transform 0.3s ease, visibility 0s linear 0.3s;
+  }
+
+  .stickybook.is-shown {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.3s ease, visibility 0s;
+  }
+
+  /* While the consent banner is open the bar stays away. consent.js lifts
+     .stickybook by a fixed 8.5rem, but on a phone the banner is taller than
+     that, so the bar would sit half behind it; stacked above it instead, the
+     two would cover half the screen. The bar arrives once the visitor answers.
+     (body.mbc-open .stickybook outranks .stickybook.is-shown.) */
+  body.mbc-open .stickybook {
+    visibility: hidden;
+  }
+
+  .stickybook__meta {
+    flex: 1 1 auto;
+    min-width: 0;
+    line-height: 1.25;
+  }
+
+  .stickybook__name {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--ivory);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .stickybook__sub {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--gilt);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .stickybook__call,
+  .stickybook__cta {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    padding: 0.7rem 1.05rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+
+  .stickybook__call {
+    border: 1px solid var(--gilt);
+    color: var(--gilt);
+  }
+
+  .stickybook__cta {
+    background: var(--gilt);
+    color: var(--noir);
+  }
+
+  .stickybook__call:focus-visible,
+  .stickybook__cta:focus-visible {
+    outline: 2px solid var(--ivory);
+    outline-offset: 2px;
+  }
+
+  /* Nothing at the foot of the page may hide behind the bar. */
+  body {
+    padding-bottom: 5.5rem;
+  }
+}
+
+@media (max-width: 699px) and (prefers-reduced-motion: reduce) {
+  .stickybook,
+  .stickybook.is-shown {
+    transition: none;
+  }
+}
+
 .scroll-cue {
   position: absolute;
   left: var(--pad-x);

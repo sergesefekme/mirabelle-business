@@ -1337,6 +1337,19 @@
       </div>
     </footer>
 
+    <!-- Phone action bar (under 700px). Same pattern as the service pages'
+         .stickybook, plus Call. main.js shows it once the hero has scrolled
+         away and hides it while the booking form is on screen; consent.js
+         already lifts any .stickybook above the cookie banner. -->
+    <div class="stickybook" id="stickybook" role="region" aria-label="Book or call the salon">
+      <span class="stickybook__meta">
+        <span class="stickybook__name">Mirabelle.B</span>
+        <span class="stickybook__sub">Appointments &amp; walk-ins welcome</span>
+      </span>
+      <a class="stickybook__call" href="tel:+15714260602" aria-label="Call the salon, 571-426-0602">Call</a>
+      <a class="stickybook__cta" href="#book">Book</a>
+    </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
